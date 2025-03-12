@@ -2,7 +2,7 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=America/Chicago
 
-RUN cd ~
+RUN cd /root
 RUN apt update && apt upgrade -y
 RUN apt install tzdata -y
 
@@ -67,43 +67,43 @@ RUN apt install -y build-essential \
     tmuxinator
 
 # Create virtual environment
-RUN python3 -m venv ~/px4-venv
-RUN source ~/px4-venv/bin/activate
+RUN python3 -m venv /root/px4-venv
+RUN source /root/px4-venv/bin/activate
 RUN pip3 install -U empy pyros-genmsg setuptools
 
 # Setup Micro XRCE-DDS
-RUN cd ~ && \
+RUN cd /root && \
     git clone https://github.com/eProsima/Micro-XRCE-DDS-Agent.git && \
     cd Micro-XRCE-DDS-Agent && mkdir build && cd build && cmake .. && make && make install && ldconfig /usr/local/lib/
 
 RUN apt install -y apt-utils
 RUN python3 -m pip install --upgrade pip
-# RUN pip install --upgrade pip==20.2
-# Before cloning PX4-Autopilot, downgrade setuptools
+
+# Before cloning PX4-Autopilot, downgrade setuptools to prevent incompatible versions with empy package
 RUN pip3 install setuptools==65.5.0
 
 
 # Install PX4
-RUN cd ~ && \
+RUN cd /root && \
     git clone https://github.com/PX4/PX4-Autopilot.git --recursive && \
     bash ./PX4-Autopilot/Tools/setup/ubuntu.sh && \
     cd PX4-Autopilot && \
     make px4_sitl
 
 # Build ROS2 workspaces
-RUN mkdir -p ~/ws_sensor_combined/src/ && \
-    cd ~/ws_sensor_combined/src/ && \
+RUN mkdir -p /root/ws_sensor_combined/src/ && \
+    cd /root/ws_sensor_combined/src/ && \
     git clone https://github.com/PX4/px4_msgs.git && \
     git clone https://github.com/PX4/px4_ros_com.git && \
-    cd ~/ws_sensor_combined && \
+    cd /root/ws_sensor_combined && \
     source /opt/ros/humble/setup.bash && \
     colcon build
 
-RUN mkdir -p ~/ws_offboard_control/src/ && \
-    cd ~/ws_offboard_control/src/ && \
+RUN mkdir -p /root/ws_offboard_control/src/ && \
+    cd /root/ws_offboard_control/src/ && \
     git clone https://github.com/PX4/px4_msgs.git && \
     git clone https://github.com/PX4/px4_ros_com.git && \
-    cd ~/ws_offboard_control && \
+    cd /root/ws_offboard_control && \
     source /opt/ros/humble/setup.bash && \
     colcon build
 
@@ -121,35 +121,23 @@ RUN apt install ros-humble-ros-gzgarden -y
 RUN pip3 uninstall -y numpy 
 
 # Copy models and worlds from local repository
-RUN mkdir -p /~/.gz/fuel/fuel.ignitionrobotics.org/openrobotics/models/
-COPY ~/dock_ock/PX4-ROS2-Gazebo-YOLOv8 /~/PX4-ROS2-Gazebo-YOLOv8/
-COPY PX4-ROS2-Gazebo-YOLOv8/models/. /~/.gz/models/
-COPY PX4-ROS2-Gazebo-YOLOv8/models_docker/. /~/.gz/fuel/fuel.ignitionrobotics.org/openrobotics/models/
-COPY PX4-ROS2-Gazebo-YOLOv8/worlds/default_docker.sdf /~/PX4-Autopilot/Tools/simulation/gz/worlds/default.sd
+RUN mkdir -p /root/.gz/fuel/fuel.ignitionrobotics.org/openrobotics/models/
+COPY PX4-ROS2-Gazebo-YOLOv8 /root/PX4-ROS2-Gazebo-YOLOv8/
+COPY PX4-ROS2-Gazebo-YOLOv8/models/. /root/.gz/models/
+COPY PX4-ROS2-Gazebo-YOLOv8/models_docker/. /root/.gz/fuel/fuel.ignitionrobotics.org/openrobotics/models/
+COPY PX4-ROS2-Gazebo-YOLOv8/worlds/default_docker.sdf /root/PX4-Autopilot/Tools/simulation/gz/worlds/default.sd
 
 # Modify camera angle
-RUN sed -i 's|<pose>.12 .03 .242 0 0 0</pose>|<pose>.15 .029 .21 0 0.7854 0</pose>|' ~/PX4-Autopilot/Tools/simulation/gz/models/x500_depth/model.sdf
+RUN sed -i 's|<pose>.12 .03 .242 0 0 0</pose>|<pose>.15 .029 .21 0 0.7854 0</pose>|' /root/PX4-Autopilot/Tools/simulation/gz/models/x500_depth/model.sdf
 
 # Bash
-RUN echo "source /~/ws_sensor_combined/install/setup.bash" >> /~/.bashrc && \
-    echo "source /opt/ros/humble/setup.bash" >> /~/.bashrc && \
-    echo "export GZ_SIM_RESOURCE_PATH=/~/.gz/models" >> /~/.bashrc
+RUN source /root/ws_sensor_combined/install/setup.bash && echo "source /root/ws_sensor_combined/install/setup.bash" >> /root/.bashrc && \
+    source /opt/ros/humble/setup.bash && echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc && \
+    export GZ_SIM_RESOURCE_PATH=/root/.gz/models && echo "export GZ_SIM_RESOURCE_PATH=/root/.gz/models" >> /root/.bashrc
 
-    RUN apt update && apt -y upgrade && apt -y install \
-    libxext-dev \
-    libx11-dev \
-    libglvnd-dev \
-    libglx-dev \
-    libgl1-mesa-dev \
-    libgl1-mesa-glx \
-    libgl1-mesa-dri \
-    libegl1-mesa-dev \
-    libgles2-mesa-dev \
-    freeglut3-dev \
-    mesa-utils \
-    mesa-utils-extra
+RUN apt update && apt -y upgrade && apt -y install mesa-utils
 
 ENV LD_LIBRARY_PATH=/usr/lib/wsl/lib
 ENV LIBVA_DRIVER_NAME=d3d12
 
-RUN export MESA_D3D12_DEFAULT_NAME=NVIDIA && echo "export MESA_D3D12_DEFAULT_NAME=NVIDIA" >> /~/.bashrc
+RUN export MESA_D3D12_DEFAULT_NAME=NVIDIA && echo "export MESA_D3D12_DEFAULT_NAME=NVIDIA" >> /root/.bashrc
