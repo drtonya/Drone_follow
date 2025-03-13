@@ -33,9 +33,9 @@ RUN apt install ros-dev-tools -y
 RUN source /opt/ros/humble/setup.bash && echo "source /opt/ros/humble/setup.bash" >> .bashrc
 
 # Install Gazebo
-RUN curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
-RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
-RUN apt update && apt install gz-garden -y
+# RUN curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
+# RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
+# RUN apt update && apt install gz-garden -y
 
 # Install dependencies
 RUN apt update && apt upgrade -y
@@ -66,10 +66,9 @@ RUN apt install -y build-essential \
     ruby \
     tmuxinator
 
-# Create virtual environment
+# Create virtual environment and setuptools version is important
 RUN python3 -m venv /root/px4-venv
-RUN source /root/px4-venv/bin/activate
-RUN pip3 install -U empy pyros-genmsg setuptools
+RUN source /root/px4-venv/bin/activate && pip3 install -U empy pyros-genmsg setuptools==65.5.0
 
 # Setup Micro XRCE-DDS
 RUN cd /root && \
@@ -79,14 +78,10 @@ RUN cd /root && \
 RUN apt install -y apt-utils
 RUN python3 -m pip install --upgrade pip
 
-# Before cloning PX4-Autopilot, downgrade setuptools to prevent incompatible versions with empy package
-RUN pip3 install setuptools==65.5.0
-
-
 # Install PX4
 RUN cd /root && \
-    git clone https://github.com/PX4/PX4-Autopilot.git --recursive && \
-    bash ./PX4-Autopilot/Tools/setup/ubuntu.sh && \
+    git clone https://github.com/PX4/PX4-Autopilot.git --recursive && source /root/px4-venv/bin/activate && \
+    bash /root/PX4-Autopilot/Tools/setup/ubuntu.sh && \
     cd PX4-Autopilot && \
     make px4_sitl
 
@@ -108,7 +103,7 @@ RUN mkdir -p /root/ws_offboard_control/src/ && \
     colcon build
 
 # Install python requirements
-RUN pip3 install mavsdk \
+RUN source /root/px4-venv/bin/activate && pip3 install mavsdk \
     aioconsole \
     pygame \
     numpy \
@@ -118,14 +113,14 @@ RUN pip3 install mavsdk \
 RUN apt install ros-humble-ros-gzgarden -y
 
 # Uninstall because of version mismatch
-RUN pip3 uninstall -y numpy 
+RUN source /root/px4-venv/bin/activate && pip3 uninstall -y numpy && pip3 install numpy==1.26.4
 
 # Copy models and worlds from local repository
 RUN mkdir -p /root/.gz/fuel/fuel.ignitionrobotics.org/openrobotics/models/
 COPY PX4-ROS2-Gazebo-YOLOv8 /root/PX4-ROS2-Gazebo-YOLOv8/
 COPY PX4-ROS2-Gazebo-YOLOv8/models/. /root/.gz/models/
 COPY PX4-ROS2-Gazebo-YOLOv8/models_docker/. /root/.gz/fuel/fuel.ignitionrobotics.org/openrobotics/models/
-COPY PX4-ROS2-Gazebo-YOLOv8/worlds/default_docker.sdf /root/PX4-Autopilot/Tools/simulation/gz/worlds/default.sd
+COPY PX4-ROS2-Gazebo-YOLOv8/worlds/default_docker.sdf /root/PX4-Autopilot/Tools/simulation/gz/worlds/default.sdf
 
 # Modify camera angle
 RUN sed -i 's|<pose>.12 .03 .242 0 0 0</pose>|<pose>.15 .029 .21 0 0.7854 0</pose>|' /root/PX4-Autopilot/Tools/simulation/gz/models/x500_depth/model.sdf
