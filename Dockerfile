@@ -2,44 +2,54 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=America/Chicago
 
-RUN cd /root
+RUN cd $HOME
 RUN apt update && apt upgrade -y
-RUN apt install tzdata -y
+RUN apt install tzdata -y && apt install -y sudo
 
-# Change shell to bash
-SHELL ["/bin/bash", "-c"] 
-
+# Change shell to bash and add user
+SHELL ["/bin/bash", "-c"]
+ARG USER=myuser
+ARG HOME=/home/myuser
+RUN useradd -ms /bin/bash $USER
+RUN echo "$USER ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+USER $USER
+WORKDIR $HOME
 
 # Set the locale
-RUN apt update && apt install locales
-RUN locale-gen en_US en_US.UTF-8
-RUN update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+RUN sudo sudo apt update && sudo sudo apt install locales
+RUN sudo locale-gen en_US en_US.UTF-8
+RUN sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 RUN export LANG=en_US.UTF-8
 
 # Install software-properties-common and add repository
-RUN apt install software-properties-common -y
-RUN add-apt-repository universe
+RUN sudo apt install software-properties-common -y
+RUN sudo add-apt-repository universe
 
 # Add key and repository for ROS2
-RUN apt update && apt install curl -y
-RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
-RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
+RUN sudo apt update && sudo apt install curl -y
+RUN sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
 
 # Install and Source ROS2
-RUN apt update && apt upgrade -y
-RUN apt install ros-humble-desktop-full -y
-RUN apt install ros-humble-ros-base -y
-RUN apt install ros-dev-tools -y
+RUN sudo apt update && sudo apt upgrade -y
+RUN sudo apt install ros-humble-desktop -y
+RUN sudo apt install ros-humble-ros-base -y
+RUN sudo apt install ros-dev-tools -y
 RUN source /opt/ros/humble/setup.bash && echo "source /opt/ros/humble/setup.bash" >> .bashrc
 
 # Install Gazebo
-# RUN curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
-# RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
-# RUN apt update && apt install gz-garden -y
+RUN sudo apt update && sudo apt install curl lsb-release gnupg && \
+    sudo curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null && \
+    sudo apt update && sudo apt install gz-harmonic -y
+
+# Install humble-gz-bridge
+RUN sudo apt update && sudo apt install ros-humble-ros-gzharmonic -y && \
+    export GZ_VERSION=harmonic && echo "export GZ_VERSION=harmonic" >> $HOME/.bashrc
 
 # Install dependencies
-RUN apt update && apt upgrade -y
-RUN apt install -y build-essential \
+RUN sudo apt update && sudo apt upgrade -y
+RUN sudo apt install -y build-essential \
     cmake \
     python3 \
     python3-colcon-common-extensions \
@@ -66,73 +76,112 @@ RUN apt install -y build-essential \
     ruby \
     tmuxinator
 
-# Create virtual environment and setuptools version is important
-RUN python3 -m venv /root/px4-venv
-RUN source /root/px4-venv/bin/activate && pip3 install -U empy pyros-genmsg setuptools==65.5.0
+RUN source /opt/ros/humble/setup.bash && echo "source /opt/ros/humble/setup.bash" >> $HOME/.bashrc && \
+    export GZ_SIM_RESOURCE_PATH=$HOME/.gz/models && echo "export GZ_SIM_RESOURCE_PATH=$HOME/.gz/models" >> $HOME/.bashrc
 
-# Setup Micro XRCE-DDS
-RUN cd /root && \
-    git clone https://github.com/eProsima/Micro-XRCE-DDS-Agent.git && \
-    cd Micro-XRCE-DDS-Agent && mkdir build && cd build && cmake .. && make && make install && ldconfig /usr/local/lib/
-
-RUN apt install -y apt-utils
-RUN python3 -m pip install --upgrade pip
-
-# Install PX4
-RUN cd /root && \
-    git clone https://github.com/PX4/PX4-Autopilot.git --recursive && source /root/px4-venv/bin/activate && \
-    bash /root/PX4-Autopilot/Tools/setup/ubuntu.sh && \
-    cd PX4-Autopilot && \
-    make px4_sitl
-
-# Build ROS2 workspaces
-RUN mkdir -p /root/ws_sensor_combined/src/ && \
-    cd /root/ws_sensor_combined/src/ && \
-    git clone https://github.com/PX4/px4_msgs.git && \
-    git clone https://github.com/PX4/px4_ros_com.git && \
-    cd /root/ws_sensor_combined && \
-    source /opt/ros/humble/setup.bash && \
-    colcon build
-
-RUN mkdir -p /root/ws_offboard_control/src/ && \
-    cd /root/ws_offboard_control/src/ && \
-    git clone https://github.com/PX4/px4_msgs.git && \
-    git clone https://github.com/PX4/px4_ros_com.git && \
-    cd /root/ws_offboard_control && \
-    source /opt/ros/humble/setup.bash && \
-    colcon build
-
-# Install python requirements
-RUN source /root/px4-venv/bin/activate && pip3 install mavsdk \
-    aioconsole \
-    pygame \
-    numpy \
-    opencv-python \
-    ultralytics
-
-RUN apt install ros-humble-ros-gzgarden -y
-
-# Uninstall because of version mismatch
-RUN source /root/px4-venv/bin/activate && pip3 uninstall -y numpy && pip3 install numpy==1.26.4
-
-# Copy models and worlds from local repository
-RUN mkdir -p /root/.gz/fuel/fuel.ignitionrobotics.org/openrobotics/models/
-COPY PX4-ROS2-Gazebo-YOLOv8 /root/PX4-ROS2-Gazebo-YOLOv8/
-COPY PX4-ROS2-Gazebo-YOLOv8/models/. /root/.gz/models/
-COPY PX4-ROS2-Gazebo-YOLOv8/models_docker/. /root/.gz/fuel/fuel.ignitionrobotics.org/openrobotics/models/
-COPY PX4-ROS2-Gazebo-YOLOv8/worlds/default_docker.sdf /root/PX4-Autopilot/Tools/simulation/gz/worlds/default.sdf
-
-# Modify camera angle
-RUN sed -i 's|<pose>.12 .03 .242 0 0 0</pose>|<pose>.15 .029 .21 0 0.7854 0</pose>|' /root/PX4-Autopilot/Tools/simulation/gz/models/x500_depth/model.sdf
-
-# Bash
-RUN source /root/ws_sensor_combined/install/setup.bash && echo "source /root/ws_sensor_combined/install/setup.bash" >> /root/.bashrc && \
-    source /opt/ros/humble/setup.bash && echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc && \
-    export GZ_SIM_RESOURCE_PATH=/root/.gz/models && echo "export GZ_SIM_RESOURCE_PATH=/root/.gz/models" >> /root/.bashrc
-
-RUN apt update && apt -y upgrade && apt -y install mesa-utils
+RUN sudo apt update && sudo apt -y upgrade && sudo apt -y install mesa-utils
 
 ENV LD_LIBRARY_PATH=/usr/lib/wsl/lib
 ENV LIBVA_DRIVER_NAME=d3d12
 
-RUN export MESA_D3D12_DEFAULT_NAME=NVIDIA && echo "export MESA_D3D12_DEFAULT_NAME=NVIDIA" >> /root/.bashrc
+RUN export MESA_D3D12_DEFAULT_NAME=NVIDIA && echo "export MESA_D3D12_DEFAULT_NAME=NVIDIA" >> $HOME/.bashrc
+
+# Create workspace for package and ardupilot
+RUN cd $HOME && mkdir -p $HOME/ros2_ws/src && sudo rosdep init
+
+# Install ardupilot
+RUN cd $HOME && \
+    sudo apt install gitk git-gui -y && \
+    sudo apt install gcc-arm-none-eabi -y && \
+    git clone --recurse-submodules https://github.com/ArduPilot/ardupilot.git
+
+RUN cd $HOME/ardupilot && \
+    ./Tools/environment_install/install-prereqs-ubuntu.sh -y
+
+RUN . $HOME/.profile
+
+# Configure waf and add important paths to bashrc
+RUN cd $HOME/ardupilot && \
+    ./waf distclean && \
+    ./waf configure --board=sitl && \
+    ./waf copter
+
+RUN export PATH=\$PATH:$HOME/ardupilot/Tools/autotest && \
+    echo "export PATH=\$PATH:$HOME/ardupilot/Tools/autotest" >> $HOME/.bashrc && \
+    export PATH=/usr/lib/ccache:$PATH && \
+    echo "export PATH=/usr/lib/ccache:$PATH" >> $HOME/.bashrc
+
+# Install dependency Micro-XRCE-DDS
+RUN sudo apt install default-jre -y && \
+    sudo apt install openjdk-17-jdk -y && \
+    export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 && \
+    echo 'export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64' >> $HOME/.bashrc && \
+    cd $HOME && \
+    git clone --recurse-submodules https://github.com/ardupilot/Micro-XRCE-DDS-Gen.git && \
+    cd Micro-XRCE-DDS-Gen && \
+    ./gradlew assemble && \
+    export PATH=\$PATH:$PWD/scripts && \
+    echo "export PATH=\$PATH:$PWD/scripts" >> $HOME/.bashrc && \
+    export PATH=$PATH:$HOME/Micro-XRCE-DDS-Gen/scripts && \
+    echo "export PATH=$PATH:$HOME/Micro-XRCE-DDS-Gen/scripts" >> $HOME/.bashrc
+
+# Install ardupilot and micro-ros-agent into your workspace
+RUN cd $HOME/ros2_ws && \
+    sudo apt install python3-vcstool -y && \
+    vcs import --recursive --input  https://raw.githubusercontent.com/ArduPilot/ardupilot/master/Tools/ros2/ros2.repos src && \
+    sudo apt update && source /opt/ros/humble/setup.bash && rosdep update && \
+    rosdep install --from-paths src --ignore-src -r -y && \
+    export PATH=$PATH:$HOME/Micro-XRCE-DDS-Gen/scripts && \
+    colcon build --packages-up-to ardupilot_dds_tests
+
+# Install ardupilot_gazebo plugin into workspace
+RUN cd $HOME/ros2_ws/src && \
+    sudo apt update && \
+    sudo apt install -y libgz-sim8-dev rapidjson-dev && \
+    sudo apt install -y libopencv-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-gl && \
+    git clone https://github.com/ArduPilot/ardupilot_gazebo.git && \
+    export GZ_VERSION=harmonic && \
+    cd ardupilot_gazebo && \
+    mkdir build && \
+    cd build && \
+    cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo && \
+    make -j4 && \
+    echo "export GZ_VERSION=harmonic" >> $HOME/.bashrc && \
+    sudo bash -c 'wget https://raw.githubusercontent.com/osrf/osrf-rosdep/master/gz/00-gazebo.list -O /etc/ros/rosdep/sources.list.d/00-gazebo.list' && \
+    cd $HOME/ros2_ws && rosdep update && \
+    rosdep resolve gz-harmonic --rosdistro humble && \
+    rosdep install --from-paths src --ignore-src -y --rosdistro humble
+
+RUN export GZ_SIM_SYSTEM_PLUGIN_PATH=$HOME/ros2_ws/src/ardupilot_gazebo/build:$GZ_SIM_SYSTEM_PLUGIN_PATH && \
+    echo "export GZ_SIM_SYSTEM_PLUGIN_PATH=$HOME/ros2_ws/src/ardupilot_gazebo/build:$GZ_SIM_SYSTEM_PLUGIN_PATH" >> $HOME/.bashrc && \
+    export GZ_SIM_RESOURCE_PATH=$HOME/ros2_ws/src/ardupilot_gazebo/models:$HOME/ardupilot_gazebo/worlds:$GZ_SIM_RESOURCE_PATH && \
+    echo "export GZ_SIM_RESOURCE_PATH=$HOME/ros2_ws/src/ardupilot_gazebo/models:$HOME/ardupilot_gazebo/worlds:$GZ_SIM_RESOURCE_PATH" >> $HOME/.bashrc
+
+RUN cd $HOME/ros2_ws/src && \
+    git clone https://github.com/ArduPilot/SITL_Models.git
+
+RUN cd $HOME/ros2_ws/src && \
+    git clone https://github.com/ArduPilot/ardupilot_gz.git && \
+    export GZ_VERSION=harmonic && \
+    source /opt/ros/humble/setup.bash && cd $HOME/ros2_ws && \
+    sudo apt update && \
+    rosdep update && \
+    rosdep install --from-paths src --ignore-src -y
+
+RUN cd $HOME/ros2_ws/src && \
+    git clone https://github.com/gazebosim/ros_gz.git -b humble && \
+    cd $HOME/ros2_ws && \
+    rosdep install -r --from-paths src -i -y --rosdistro humble && \
+    source /opt/ros/humble/setup.bash && cd $HOME/ros2_ws && \
+    export ROS_DISTRO=humble && \
+    echo "export ROS_DISTRO=humble" >> $HOME/.bashrc && \
+    export PATH=$PATH:$HOME/Micro-XRCE-DDS-Gen/scripts && \
+    export GZ_SIM_SYSTEM_PLUGIN_PATH=$HOME/ros2_ws/src/ardupilot_gazebo/build:$GZ_SIM_SYSTEM_PLUGIN_PATH && \
+    export GZ_SIM_RESOURCE_PATH=$HOME/ros2_ws/src/ardupilot_gazebo/models:$HOME/ardupilot_gazebo/worlds:$GZ_SIM_RESOURCE_PATH && \
+    export GZ_VERSION=harmonic && \
+    colcon build
+
+RUN cd $HOME/ros2_ws/src && \
+    mkdir multi_robot_follow
+
+VOLUME [ "$HOME/ros2_ws/src/multi_robot_follow" ]

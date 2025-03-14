@@ -1,0 +1,31 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Selection
+    Name: Selection
+Visualization Manager:
+  Global Options:
+    Fixed Frame: map
+  Displays:
+    - Name: Map
+      Class: rviz/Map
+      Enabled: true
+      Topic: /map
+    - Name: LaserScan (Ground Robot)
+      Class: rviz/LaserScan
+      Enabled: true
+      Topic: /ground_robot/scan
+      Color: {r: 1.0, g: 0.0, b: 0.0}
+    - Name: LaserScan (Drone)
+      Class: rviz/LaserScan
+      Enabled: true
+      Topic: /drone/scan
+      Color: {r: 0.0, g: 1.0, b: 0.0}
+    - Name: RobotModel (Ground Robot)
+      Class: rviz/RobotModel
+      Enabled: true
+      Robot Description: robot_description_ground
+    - Name: RobotModel (Drone)
+      Class: rviz/RobotModel
+      Enabled: true
+      Robot Description: robot_description_drone

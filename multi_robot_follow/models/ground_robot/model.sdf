@@ -1,0 +1,35 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <model name="ground_robot">
+    <static>false</static>
+    <link name="base_link">
+      <visual name="visual">
+        <geometry>
+          <box>
+            <size>0.6 0.6 0.3</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 0 0 1</ambient>
+          <diffuse>1 0 0 1</diffuse>
+        </material>
+      </visual>
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>0.6 0.6 0.3</size>
+          </box>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass>2.0</mass>
+        <inertia>
+          <ixx>0.2</ixx>
+          <iyy>0.2</iyy>
+          <izz>0.2</izz>
+        </inertia>
+      </inertial>
+    </link>
+  </model>
+</sdf>
+ 
