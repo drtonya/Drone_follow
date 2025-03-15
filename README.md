@@ -19,8 +19,15 @@ sudo docker run -it -v /tmp/.X11-unix:/tmp/.X11-unix \
     - Starting an X-11 server
     - Giving the container necessary info from wsl
 
-- After running, you have to do this:
-    - . $HOME/.profile
+- After running, you might have to do some of these:
+    - source /home/myuser/.bashrc
+    - might have to build workspace again (MAKE SURE NOT IN SRC)
+    - might have to do ./gradlew assemble in Micro DDS folder again
+    - source /home/myuser/.profile
+    - export PATH=$PATH:/home/myuser/ros2_ws/src/ardupilot/Tools/autotest
+    - export PATH=/usr/lib/ccache:$PATH
+    - export GZ_VERSION=harmonic
+    - export PATH=$PATH:/home/myuser/ros2_ws/Micro-XRCE-DDS-Gen/scripts
 
 - More information on running containers with wsl here:
     - https://github.com/microsoft/wslg/blob/main/samples/container/Containers.md
@@ -116,4 +123,28 @@ RUN cd $HOME/ros2_ws/src && \
     git clone https://github.com/ArduPilot/SITL_Models.git && \
     export GZ_VERSION=harmonic && \
     colcon build
+
+# Install humble-gz-bridge
+RUN sudo apt update && sudo apt install ros-humble-ros-gzharmonic -y && \
+    export GZ_VERSION=harmonic && echo "export GZ_VERSION=harmonic" >> ${HOME_DIR}/.bashrc
+
+# Install dependencies
+RUN sudo apt update && sudo apt upgrade -y
+RUN sudo apt install -y build-essential \
+    cmake \
+    python3 \
+    python3-colcon-common-extensions \
+    python3-rosdep \
+    python3-rosinstall \
+    python3-rosinstall-generator \
+    python3-vcstool \
+    python3-pip \
+    clang \
+    lldb \
+    ninja-build \
+    libgtest-dev \
+    libeigen3-dev \
+    libyaml-dev \
+    sudo \
+    wget \
 ```
